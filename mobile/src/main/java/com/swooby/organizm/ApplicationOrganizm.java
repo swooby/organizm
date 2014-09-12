@@ -2,29 +2,20 @@ package com.swooby.organizm;
 
 import android.app.Application;
 import android.content.res.Configuration;
-import edu.cmu.pocketsphinx.RecognitionListener;
-import edu.cmu.pocketsphinx.Hypothesis;
+import android.os.AsyncTask;
 
-import static android.widget.Toast.makeText;
-import static edu.cmu.pocketsphinx.SpeechRecognizerSetup.defaultSetup;
+import com.smartfoo.logging.FooLog;
+import com.smartfoo.utils.FooToast;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 
-import android.app.Activity;
-import android.os.AsyncTask;
-import android.os.Bundle;
-import android.widget.TextView;
-import android.widget.Toast;
-
-import com.smartfoo.logging.FooLog;
-import com.smartfoo.utils.FooToast;
-
 import edu.cmu.pocketsphinx.Assets;
 import edu.cmu.pocketsphinx.Hypothesis;
 import edu.cmu.pocketsphinx.RecognitionListener;
 import edu.cmu.pocketsphinx.SpeechRecognizer;
+import edu.cmu.pocketsphinx.SpeechRecognizerSetup;
 
 /**
  * Created by Pv on 9/11/2014.
@@ -75,16 +66,16 @@ public class ApplicationOrganizm //
     @Override
     public void onCreate() {
         FooLog.info(TAG, "+onCreate()");
+
         super.onCreate();
 
         // Prepare the data for UI
+        FooToast.showShort(this, "Preparing the recognizer");
         captions = new HashMap<String, Integer>();
         captions.put(KWS_SEARCH, R.string.kws_caption);
         captions.put(MENU_SEARCH, R.string.menu_caption);
         captions.put(DIGITS_SEARCH, R.string.digits_caption);
         captions.put(FORECAST_SEARCH, R.string.forecast_caption);
-        FooToast.showShort(this, "Preparing the recognizer");
-
         // Recognizer initialization is a time-consuming & involves IO; execute it in async task
         new AsyncTask<Void, Void, Exception>() {
             @Override
@@ -108,44 +99,51 @@ public class ApplicationOrganizm //
                 }
             }
         }.execute();
+
         FooLog.info(TAG, "-onCreate()");
     }
 
     @Override
     public void onPartialResult(Hypothesis hypothesis) {
-        if (hypothesis == null)
-            return;
-
-        String text = hypothesis.getHypstr();
-        if (text.equals(KEYPHRASE)) {
-            switchSearch(MENU_SEARCH);
-        } else if (text.equals(DIGITS_SEARCH)) {
-            switchSearch(DIGITS_SEARCH);
-        } else if (text.equals(FORECAST_SEARCH)) {
-            switchSearch(FORECAST_SEARCH);
-        } else {
-            FooToast.showShort(this, text);
+        FooLog.info(TAG, "+onPartialResult(...)");
+        if (hypothesis != null) {
+            String text = hypothesis.getHypstr();
+            if (text.equals(KEYPHRASE)) {
+                switchSearch(MENU_SEARCH);
+            } else if (text.equals(DIGITS_SEARCH)) {
+                switchSearch(DIGITS_SEARCH);
+            } else if (text.equals(FORECAST_SEARCH)) {
+                switchSearch(FORECAST_SEARCH);
+            } else {
+                FooToast.showShort(this, text);
+            }
         }
+        FooLog.info(TAG, "-onPartialResult(...)");
     }
 
     @Override
     public void onResult(Hypothesis hypothesis) {
-        //((TextView) findViewById(R.id.result_text)).setText("");
+        FooLog.info(TAG, "+onResult(...)");
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
             FooToast.showShort(this, text);
         }
+        FooLog.info(TAG, "-onResult(...)");
     }
 
     @Override
     public void onBeginningOfSpeech() {
+        FooLog.info(TAG, "+onBeginningOfSpeech()");
+        FooLog.info(TAG, "-onBeginningOfSpeech()");
     }
 
     @Override
     public void onEndOfSpeech() {
+        FooLog.info(TAG, "+onEndOfSpeech()");
         if (!recognizer.getSearchName().equals(KWS_SEARCH)) {
             switchSearch(KWS_SEARCH);
         }
+        FooLog.info(TAG, "-onEndOfSpeech()");
     }
 
     private void switchSearch(String searchName) {
@@ -164,7 +162,7 @@ public class ApplicationOrganizm //
 
     private void setupRecognizer(File assetsDir) {
         File modelsDir = new File(assetsDir, "models");
-        recognizer = defaultSetup()
+        recognizer = SpeechRecognizerSetup.defaultSetup()
                 .setAcousticModel(new File(modelsDir, "hmm/en-us-semi"))
                 .setDictionary(new File(modelsDir, "dict/cmu07a.dic"))
                 .setRawLogDir(assetsDir).setKeywordThreshold(1e-40f)
