@@ -5,6 +5,8 @@ import android.content.res.Configuration;
 import android.os.AsyncTask;
 
 import com.smartfoo.logging.FooLog;
+import com.smartfoo.speech.FooTextToSpeech;
+import com.smartfoo.types.FooString;
 import com.smartfoo.utils.FooToast;
 
 import java.io.File;
@@ -60,6 +62,7 @@ public class ApplicationOrganizm //
     private static final String MENU_SEARCH = "menu";
     private static final String KEYPHRASE = "oh mighty computer";
 
+    private FooTextToSpeech textToSpeech;
     private SpeechRecognizer recognizer;
     private HashMap<String, Integer> captions;
 
@@ -70,7 +73,11 @@ public class ApplicationOrganizm //
         super.onCreate();
 
         // Prepare the data for UI
-        FooToast.showShort(this, "Preparing the recognizer");
+        textToSpeech = new FooTextToSpeech(this);
+
+        textToSpeech.speak("Preparing the recognizer");
+        //FooToast.showShort(this, "Preparing the recognizer");
+
         captions = new HashMap<String, Integer>();
         captions.put(KWS_SEARCH, R.string.kws_caption);
         captions.put(MENU_SEARCH, R.string.menu_caption);
@@ -93,7 +100,8 @@ public class ApplicationOrganizm //
             @Override
             protected void onPostExecute(Exception result) {
                 if (result != null) {
-                    FooToast.showLong(ApplicationOrganizm.this, "Failed to init recognizer: " + result);
+                    textToSpeech.speak("Failed to init recognizer: " + result);
+                    //FooToast.showLong(ApplicationOrganizm.this, "Failed to init recognizer: " + result);
                 } else {
                     switchSearch(KWS_SEARCH);
                 }
@@ -108,14 +116,17 @@ public class ApplicationOrganizm //
         FooLog.info(TAG, "+onPartialResult(...)");
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
-            if (text.equals(KEYPHRASE)) {
-                switchSearch(MENU_SEARCH);
-            } else if (text.equals(DIGITS_SEARCH)) {
-                switchSearch(DIGITS_SEARCH);
-            } else if (text.equals(FORECAST_SEARCH)) {
-                switchSearch(FORECAST_SEARCH);
-            } else {
-                FooToast.showShort(this, text);
+            if (!FooString.isNullOrEmpty(text)) {
+                if (text.equals(KEYPHRASE)) {
+                    switchSearch(MENU_SEARCH);
+                } else if (text.equals(DIGITS_SEARCH)) {
+                    switchSearch(DIGITS_SEARCH);
+                } else if (text.equals(FORECAST_SEARCH)) {
+                    switchSearch(FORECAST_SEARCH);
+                } else {
+                    textToSpeech.speak(text);
+                    FooToast.showShort(this, text);
+                }
             }
         }
         FooLog.info(TAG, "-onPartialResult(...)");
@@ -124,9 +135,13 @@ public class ApplicationOrganizm //
     @Override
     public void onResult(Hypothesis hypothesis) {
         FooLog.info(TAG, "+onResult(...)");
+        textToSpeech.clear();
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
-            FooToast.showShort(this, text);
+            if (!FooString.isNullOrEmpty(text)) {
+                textToSpeech.speak(text);
+                FooToast.showShort(this, text);
+            }
         }
         FooLog.info(TAG, "-onResult(...)");
     }
@@ -157,7 +172,8 @@ public class ApplicationOrganizm //
         }
 
         String caption = getResources().getString(captions.get(searchName));
-        FooToast.showShort(this, caption);
+        textToSpeech.speak(caption);
+        //FooToast.showShort(this, caption);
     }
 
     private void setupRecognizer(File assetsDir) {
