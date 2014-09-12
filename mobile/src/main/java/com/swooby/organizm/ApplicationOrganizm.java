@@ -17,6 +17,10 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.smartfoo.logging.FooLog;
+import com.smartfoo.utils.FooToast;
+
 import edu.cmu.pocketsphinx.Assets;
 import edu.cmu.pocketsphinx.Hypothesis;
 import edu.cmu.pocketsphinx.RecognitionListener;
@@ -29,25 +33,59 @@ public class ApplicationOrganizm //
     extends Application //
     implements RecognitionListener {
 
+    private static final String TAG = FooLog.TAG(ApplicationOrganizm.class);
+
+    @Override
+    public void onTerminate() {
+        FooLog.info(TAG, "+onTerminate()");
+        super.onTerminate();
+        FooLog.info(TAG, "-onTerminate()");
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        FooLog.info(TAG, "+onConfigurationChanged(...)");
+        super.onConfigurationChanged(newConfig);
+        FooLog.info(TAG, "-onConfigurationChanged(...)");
+    }
+
+    @Override
+    public void onLowMemory() {
+        FooLog.info(TAG, "+onLowMemory()");
+        super.onLowMemory();
+        FooLog.info(TAG, "-onLowMemory()");
+    }
+
+    @Override
+    public void onTrimMemory(int level) {
+        FooLog.info(TAG, "+onTrimMemory(level=" + level + ")");
+        super.onTrimMemory(level);
+        FooLog.info(TAG, "-onTrimMemory(level=" + level + ")");
+    }
+
+    private static final String KWS_SEARCH = "wakeup";
+    private static final String FORECAST_SEARCH = "forecast";
+    private static final String DIGITS_SEARCH = "digits";
+    private static final String MENU_SEARCH = "menu";
+    private static final String KEYPHRASE = "oh mighty computer";
+
+    private SpeechRecognizer recognizer;
+    private HashMap<String, Integer> captions;
+
     @Override
     public void onCreate() {
+        FooLog.info(TAG, "+onCreate()");
         super.onCreate();
 
         // Prepare the data for UI
         captions = new HashMap<String, Integer>();
-        /*
         captions.put(KWS_SEARCH, R.string.kws_caption);
         captions.put(MENU_SEARCH, R.string.menu_caption);
         captions.put(DIGITS_SEARCH, R.string.digits_caption);
         captions.put(FORECAST_SEARCH, R.string.forecast_caption);
-        setContentView(R.layout.main);
-        ((TextView) findViewById(R.id.caption_text))
-                .setText("Preparing the recognizer");
-        */
+        FooToast.showShort(this, "Preparing the recognizer");
 
-        // Recognizer initialization is a time-consuming and it involves IO,
-        // so we execute it in async task
-
+        // Recognizer initialization is a time-consuming & involves IO; execute it in async task
         new AsyncTask<Void, Void, Exception>() {
             @Override
             protected Exception doInBackground(Void... params) {
@@ -64,45 +102,14 @@ public class ApplicationOrganizm //
             @Override
             protected void onPostExecute(Exception result) {
                 if (result != null) {
-                    /*
-                    ((TextView) findViewById(R.id.caption_text))
-                            .setText("Failed to init recognizer " + result);
-                    */
+                    FooToast.showShort(ApplicationOrganizm.this, "Failed to init recognizer: " + result);
                 } else {
                     switchSearch(KWS_SEARCH);
                 }
             }
         }.execute();
+        FooLog.info(TAG, "-onCreate()");
     }
-
-    @Override
-    public void onTerminate() {
-        super.onTerminate();
-    }
-
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-    }
-
-    @Override
-    public void onLowMemory() {
-        super.onLowMemory();
-    }
-
-    @Override
-    public void onTrimMemory(int level) {
-        super.onTrimMemory(level);
-    }
-
-    private static final String KWS_SEARCH = "wakeup";
-    private static final String FORECAST_SEARCH = "forecast";
-    private static final String DIGITS_SEARCH = "digits";
-    private static final String MENU_SEARCH = "menu";
-    private static final String KEYPHRASE = "oh mighty computer";
-
-    private SpeechRecognizer recognizer;
-    private HashMap<String, Integer> captions;
 
     @Override
     public void onPartialResult(Hypothesis hypothesis) {
@@ -117,7 +124,7 @@ public class ApplicationOrganizm //
         } else if (text.equals(FORECAST_SEARCH)) {
             switchSearch(FORECAST_SEARCH);
         } else {
-            //((TextView) findViewById(R.id.result_text)).setText(text);
+            FooToast.showShort(this, text);
         }
     }
 
@@ -126,7 +133,7 @@ public class ApplicationOrganizm //
         //((TextView) findViewById(R.id.result_text)).setText("");
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
-            makeText(getApplicationContext(), text, Toast.LENGTH_SHORT).show();
+            FooToast.showShort(this, text);
         }
     }
 
@@ -136,21 +143,23 @@ public class ApplicationOrganizm //
 
     @Override
     public void onEndOfSpeech() {
-        if (!recognizer.getSearchName().equals(KWS_SEARCH))
+        if (!recognizer.getSearchName().equals(KWS_SEARCH)) {
             switchSearch(KWS_SEARCH);
+        }
     }
 
     private void switchSearch(String searchName) {
         recognizer.stop();
 
         // If we are not spotting, start listening with timeout
-        if (searchName.equals(KWS_SEARCH))
+        if (searchName.equals(KWS_SEARCH)) {
             recognizer.startListening(searchName);
-        else
+        } else {
             recognizer.startListening(searchName, 10);
+        }
 
         String caption = getResources().getString(captions.get(searchName));
-        //((TextView) findViewById(R.id.caption_text)).setText(caption);
+        FooToast.showShort(this, caption);
     }
 
     private void setupRecognizer(File assetsDir) {
