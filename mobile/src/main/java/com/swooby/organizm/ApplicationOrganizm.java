@@ -3,6 +3,7 @@ package com.swooby.organizm;
 import android.app.Application;
 import android.content.res.Configuration;
 import android.os.AsyncTask;
+import android.widget.Toast;
 
 import com.smartfoo.logging.FooLog;
 import com.smartfoo.speech.FooTextToSpeech;
@@ -62,9 +63,11 @@ public class ApplicationOrganizm //
     private static final String MENU_SEARCH = "menu";
     private static final String KEYPHRASE = "oh mighty computer";
 
-    private FooTextToSpeech textToSpeech;
-    private SpeechRecognizer recognizer;
-    private HashMap<String, Integer> captions;
+    private FooTextToSpeech             mTextToSpeech;
+    // TODO:(pv) It would be nice to write a native C++ SpeechRecognizer that opens the mic and process the audio!
+    private SpeechRecognizer            mSpeechRecognizer;
+    private HashMap<String, Integer>    mSpeechCaptions;
+    private boolean                     mSpeechRecognizerListening;
 
     @Override
     public void onCreate() {
@@ -73,24 +76,43 @@ public class ApplicationOrganizm //
         super.onCreate();
 
         // Prepare the data for UI
-        textToSpeech = new FooTextToSpeech(this);
-
-        textToSpeech.speak("Preparing the recognizer");
-        //FooToast.showShort(this, "Preparing the recognizer");
-
-        captions = new HashMap<String, Integer>();
-        captions.put(KWS_SEARCH, R.string.kws_caption);
-        captions.put(MENU_SEARCH, R.string.menu_caption);
-        captions.put(DIGITS_SEARCH, R.string.digits_caption);
-        captions.put(FORECAST_SEARCH, R.string.forecast_caption);
+        mTextToSpeech = new FooTextToSpeech(this);
+        mSpeechCaptions = new HashMap<String, Integer>();
+        mSpeechCaptions.put(KWS_SEARCH, R.string.kws_caption);
+        mSpeechCaptions.put(MENU_SEARCH, R.string.menu_caption);
+        mSpeechCaptions.put(DIGITS_SEARCH, R.string.digits_caption);
+        mSpeechCaptions.put(FORECAST_SEARCH, R.string.forecast_caption);
         // Recognizer initialization is a time-consuming & involves IO; execute it in async task
         new AsyncTask<Void, Void, Exception>() {
+            @Override
+            protected void onPreExecute() {
+                announce("Initializing the recognizer", Toast.LENGTH_LONG);
+            }
+
             @Override
             protected Exception doInBackground(Void... params) {
                 try {
                     Assets assets = new Assets(ApplicationOrganizm.this);
-                    File assetDir = assets.syncAssets();
-                    setupRecognizer(assetDir);
+                    File assetsDir = assets.syncAssets();
+                    File modelsDir = new File(assetsDir, "models");
+                    mSpeechRecognizer = SpeechRecognizerSetup.defaultSetup() //
+                            .setAcousticModel(new File(modelsDir, "hmm/en-us-semi")) //
+                            .setDictionary(new File(modelsDir, "dict/cmu07a.dic")) //
+                            //.setRawLogDir(assetsDir) //
+                            .setKeywordThreshold(1e-40f) //
+                            .getRecognizer();
+                    mSpeechRecognizer.addListener(ApplicationOrganizm.this);
+
+                    // Create keyword-activation search.
+                    mSpeechRecognizer.addKeyphraseSearch(KWS_SEARCH, KEYPHRASE);
+                    // Create grammar-based searches.
+                    File menuGrammar = new File(modelsDir, "grammar/menu.gram");
+                    mSpeechRecognizer.addGrammarSearch(MENU_SEARCH, menuGrammar);
+                    File digitsGrammar = new File(modelsDir, "grammar/digits.gram");
+                    mSpeechRecognizer.addGrammarSearch(DIGITS_SEARCH, digitsGrammar);
+                    // Create language model search.
+                    File languageModel = new File(modelsDir, "lm/weather.dmp");
+                    mSpeechRecognizer.addNgramSearch(FORECAST_SEARCH, languageModel);
                 } catch (IOException e) {
                     return e;
                 }
@@ -100,9 +122,9 @@ public class ApplicationOrganizm //
             @Override
             protected void onPostExecute(Exception result) {
                 if (result != null) {
-                    textToSpeech.speak("Failed to init recognizer: " + result);
-                    //FooToast.showLong(ApplicationOrganizm.this, "Failed to init recognizer: " + result);
+                    announce("Failed to initialize the recognizer: " + result, Toast.LENGTH_LONG);
                 } else {
+                    announce("Recognizer initialized", Toast.LENGTH_LONG);
                     switchSearch(KWS_SEARCH);
                 }
             }
@@ -117,15 +139,14 @@ public class ApplicationOrganizm //
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
             if (!FooString.isNullOrEmpty(text)) {
-                if (text.equals(KEYPHRASE)) {
+                if (KEYPHRASE.equals(text)) {
                     switchSearch(MENU_SEARCH);
-                } else if (text.equals(DIGITS_SEARCH)) {
+                } else if (DIGITS_SEARCH.equals(text)) {
                     switchSearch(DIGITS_SEARCH);
-                } else if (text.equals(FORECAST_SEARCH)) {
+                } else if (FORECAST_SEARCH.equals(text)) {
                     switchSearch(FORECAST_SEARCH);
                 } else {
-                    textToSpeech.speak(text);
-                    FooToast.showShort(this, text);
+                    announce(text, Toast.LENGTH_SHORT);
                 }
             }
         }
@@ -135,12 +156,12 @@ public class ApplicationOrganizm //
     @Override
     public void onResult(Hypothesis hypothesis) {
         FooLog.info(TAG, "+onResult(...)");
-        textToSpeech.clear();
+        mTextToSpeech.clear();
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
+            FooLog.info(TAG, "onResult: text=" + FooString.quote(text));
             if (!FooString.isNullOrEmpty(text)) {
-                textToSpeech.speak(text);
-                FooToast.showShort(this, text);
+                announce(text, Toast.LENGTH_LONG);
             }
         }
         FooLog.info(TAG, "-onResult(...)");
@@ -155,45 +176,38 @@ public class ApplicationOrganizm //
     @Override
     public void onEndOfSpeech() {
         FooLog.info(TAG, "+onEndOfSpeech()");
-        if (!recognizer.getSearchName().equals(KWS_SEARCH)) {
+        if (!KWS_SEARCH.equals(mSpeechRecognizer.getSearchName())) {
             switchSearch(KWS_SEARCH);
         }
         FooLog.info(TAG, "-onEndOfSpeech()");
     }
 
     private void switchSearch(String searchName) {
-        recognizer.stop();
-
-        // If we are not spotting, start listening with timeout
-        if (searchName.equals(KWS_SEARCH)) {
-            recognizer.startListening(searchName);
-        } else {
-            recognizer.startListening(searchName, 10);
+        if (mSpeechRecognizerListening) {
+            mSpeechRecognizerListening = false;
+            mSpeechRecognizer.stop();
         }
 
-        String caption = getResources().getString(captions.get(searchName));
-        textToSpeech.speak(caption);
-        //FooToast.showShort(this, caption);
+        // If we are not spotting, start listening with timeout
+        if (KWS_SEARCH.equals(searchName)) {
+            mSpeechRecognizer.startListening(searchName);
+        } else {
+            mSpeechRecognizer.startListening(searchName, 10);
+        }
+        mSpeechRecognizerListening = true;
+
+        String caption = getResources().getString(mSpeechCaptions.get(searchName));
+        announce(caption, Toast.LENGTH_LONG);
     }
 
-    private void setupRecognizer(File assetsDir) {
-        File modelsDir = new File(assetsDir, "models");
-        recognizer = SpeechRecognizerSetup.defaultSetup()
-                .setAcousticModel(new File(modelsDir, "hmm/en-us-semi"))
-                .setDictionary(new File(modelsDir, "dict/cmu07a.dic"))
-                .setRawLogDir(assetsDir).setKeywordThreshold(1e-40f)
-                .getRecognizer();
-        recognizer.addListener(this);
-
-        // Create keyword-activation search.
-        recognizer.addKeyphraseSearch(KWS_SEARCH, KEYPHRASE);
-        // Create grammar-based searches.
-        File menuGrammar = new File(modelsDir, "grammar/menu.gram");
-        recognizer.addGrammarSearch(MENU_SEARCH, menuGrammar);
-        File digitsGrammar = new File(modelsDir, "grammar/digits.gram");
-        recognizer.addGrammarSearch(DIGITS_SEARCH, digitsGrammar);
-        // Create language model search.
-        File languageModel = new File(modelsDir, "lm/weather.dmp");
-        recognizer.addNgramSearch(FORECAST_SEARCH, languageModel);
+    private void announce(String text, int toastDuration) {
+        switch(toastDuration) {
+            case Toast.LENGTH_LONG:
+                FooToast.showLong(this, text);
+                break;
+            case Toast.LENGTH_SHORT:
+                FooToast.showShort(this, text);
+                break;
+        }
     }
 }
