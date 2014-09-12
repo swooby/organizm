@@ -93,7 +93,7 @@ public class ApplicationOrganizm //
             @Override
             protected void onPostExecute(Exception result) {
                 if (result != null) {
-                    FooToast.showShort(ApplicationOrganizm.this, "Failed to init recognizer: " + result);
+                    FooToast.showLong(ApplicationOrganizm.this, "Failed to init recognizer: " + result);
                 } else {
                     switchSearch(KWS_SEARCH);
                 }
