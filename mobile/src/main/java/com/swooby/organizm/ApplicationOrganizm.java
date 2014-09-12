@@ -135,9 +135,10 @@ public class ApplicationOrganizm //
 
     @Override
     public void onPartialResult(Hypothesis hypothesis) {
-        FooLog.info(TAG, "+onPartialResult(...)");
+        //FooLog.info(TAG, "+onPartialResult(...)");
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
+            FooLog.info(TAG, "onPartialResult: text=" + FooString.quote(text));
             if (!FooString.isNullOrEmpty(text)) {
                 if (KEYPHRASE.equals(text)) {
                     switchSearch(MENU_SEARCH);
@@ -150,13 +151,13 @@ public class ApplicationOrganizm //
                 }
             }
         }
-        FooLog.info(TAG, "-onPartialResult(...)");
+        //FooLog.info(TAG, "-onPartialResult(...)");
     }
 
     @Override
     public void onResult(Hypothesis hypothesis) {
         FooLog.info(TAG, "+onResult(...)");
-        mTextToSpeech.clear();
+        //mTextToSpeech.clear();
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
             FooLog.info(TAG, "onResult: text=" + FooString.quote(text));
@@ -182,25 +183,57 @@ public class ApplicationOrganizm //
         FooLog.info(TAG, "-onEndOfSpeech()");
     }
 
-    private void switchSearch(String searchName) {
+    private void switchSearch(String newSearchName) {
+        FooLog.info(TAG, "+switchSearch(newSearchName=" + FooString.quote(newSearchName) + ")");
+
+        String oldSearchName = mSpeechRecognizer.getSearchName();
+        FooLog.info(TAG, "switchSearch: oldSearchName=" + FooString.quote(oldSearchName));
+
+        FooLog.info(TAG, "switchSearch: mSpeechRecognizerListening=" + mSpeechRecognizerListening);
         if (mSpeechRecognizerListening) {
             mSpeechRecognizerListening = false;
             mSpeechRecognizer.stop();
         }
 
         // If we are not spotting, start listening with timeout
-        if (KWS_SEARCH.equals(searchName)) {
-            mSpeechRecognizer.startListening(searchName);
+        if (KWS_SEARCH.equals(newSearchName)) {
+            mSpeechRecognizer.startListening(newSearchName);
         } else {
-            mSpeechRecognizer.startListening(searchName, 10);
+            mSpeechRecognizer.startListening(newSearchName, 10);
         }
         mSpeechRecognizerListening = true;
 
-        String caption = getResources().getString(mSpeechCaptions.get(searchName));
+        String caption = getResources().getString(mSpeechCaptions.get(newSearchName));
         announce(caption, Toast.LENGTH_LONG);
+
+        FooLog.info(TAG, "-switchSearch(searchName=" + FooString.quote(newSearchName) + ")");
     }
 
+    private Runnable mRunStartRecognizerAfterAnnounce = new Runnable() {
+        @Override
+        public void run() {
+            FooLog.info(TAG, "+mRunStartRecognizerAfterAnnounce.run()");
+            // If we are not spotting, start listening with timeout
+            String searchName = mSpeechRecognizer.getSearchName();
+            if (KWS_SEARCH.equals(searchName)) {
+                mSpeechRecognizer.startListening(searchName);
+            } else {
+                mSpeechRecognizer.startListening(searchName, 10);
+            }
+            mSpeechRecognizerListening = true;
+            FooLog.info(TAG, "-mRunStartRecognizerAfterAnnounce.run()");
+        }
+    };
+
     private void announce(String text, int toastDuration) {
+        Runnable runAfter = null;
+        if (mSpeechRecognizerListening) {
+            mSpeechRecognizerListening = false;
+            mSpeechRecognizer.stop(); // .cancel();?
+            runAfter = mRunStartRecognizerAfterAnnounce;
+        }
+        mTextToSpeech.speak(text, false, runAfter);
+
         switch(toastDuration) {
             case Toast.LENGTH_LONG:
                 FooToast.showLong(this, text);

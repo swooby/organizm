@@ -70,37 +70,35 @@ public class FooTextToSpeech {
         mUtteranceCallbacks = new HashMap<String, Runnable>();
     }
 
-    public void speak(String text, Runnable runAfter) {
-        speak(text, true, runAfter);
-    }
-
     public void speak(String text, boolean flush, Runnable runAfter) {
-        FooLog.info(TAG, "+speak(...)");
+        FooLog.info(TAG, "+speak(text=" + FooString.quote(text) + ", flush=" + flush + ", runAfter=" + runAfter + ")");
         if (!FooString.isNullOrEmpty(text)) {
-            if (mIsTextToSpeechInitialized) {
+            synchronized (mTextToSpeech) {
+                if (mIsTextToSpeechInitialized) {
 
-                String utteranceId = Integer.toString(mNextUtteranceId);
+                    String utteranceId = Integer.toString(mNextUtteranceId);
 
-                HashMap<String,String> params = new HashMap<String, String>();
-                params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId);
+                    HashMap<String, String> params = new HashMap<String, String>();
+                    params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId);
 
-                int result = mTextToSpeech.speak(text, flush ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD, params);
-                if (result == TextToSpeech.SUCCESS) {
-                    mNextUtteranceId++;
-                    if (runAfter != null) {
-                        mUtteranceCallbacks.put(utteranceId, runAfter);
+                    int result = mTextToSpeech.speak(text, flush ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD, params);
+                    if (result == TextToSpeech.SUCCESS) {
+                        mNextUtteranceId++;
+                        if (runAfter != null) {
+                            mUtteranceCallbacks.put(utteranceId, runAfter);
+                        }
+                    } else {
+                        if (runAfter != null) {
+                            runAfter.run();
+                        }
                     }
                 } else {
-                    if (runAfter != null) {
-                        runAfter.run();
-                    }
+                    UtteranceInfo utteranceInfo = new UtteranceInfo(text, runAfter);
+                    mTextToSpeechQueue.add(utteranceInfo);
                 }
-            } else {
-                UtteranceInfo utteranceInfo = new UtteranceInfo(text, runAfter);
-                mTextToSpeechQueue.add(utteranceInfo);
             }
         }
-        FooLog.info(TAG, "-speak(...)");
+        FooLog.info(TAG, "-speak(text=" + FooString.quote(text) + ", flush=" + flush + ", runAfter=" + runAfter + ")");
     }
 
     public void clear() {
@@ -124,16 +122,17 @@ public class FooTextToSpeech {
     }
     protected void onInit(int status) {
         FooLog.info(TAG, "+onInit(status=" + toStringStatus(status) + ")");
-        mIsTextToSpeechInitialized = (status == TextToSpeech.SUCCESS);
+        synchronized (mTextToSpeech) {
+            mIsTextToSpeechInitialized = (status == TextToSpeech.SUCCESS);
+            if (mIsTextToSpeechInitialized) {
+                mTextToSpeech.setLanguage(Locale.getDefault());
 
-        if (mIsTextToSpeechInitialized) {
-            mTextToSpeech.setLanguage(Locale.getDefault());
-
-            Iterator<UtteranceInfo> utteranceInfos = mTextToSpeechQueue.iterator();
-            while (utteranceInfos.hasNext()) {
-                UtteranceInfo utteranceInfo = utteranceInfos.next();
-                utteranceInfos.remove();
-                speak(utteranceInfo.mText, false, utteranceInfo.mRunAfter);
+                Iterator<UtteranceInfo> utteranceInfos = mTextToSpeechQueue.iterator();
+                while (utteranceInfos.hasNext()) {
+                    UtteranceInfo utteranceInfo = utteranceInfos.next();
+                    utteranceInfos.remove();
+                    speak(utteranceInfo.mText, false, utteranceInfo.mRunAfter);
+                }
             }
         }
         FooLog.info(TAG, "-onInit(status=" + toStringStatus(status) + ")");
@@ -153,6 +152,7 @@ public class FooTextToSpeech {
     protected void onDone(String utteranceId) {
         FooLog.info(TAG, "+onDone(utteranceId=" + FooString.quote(utteranceId) + ")");
         Runnable runAfter = mUtteranceCallbacks.remove(utteranceId);
+        FooLog.info(TAG, "onDone: runAfter=" + runAfter);
         if (runAfter != null) {
             runAfter.run();
         }
@@ -162,6 +162,7 @@ public class FooTextToSpeech {
     protected void onError(String utteranceId) {
         FooLog.info(TAG, "+onError(utteranceId=" + FooString.quote(utteranceId) + ")");
         Runnable runAfter = mUtteranceCallbacks.remove(utteranceId);
+        FooLog.info(TAG, "onError: runAfter=" + runAfter);
         if (runAfter != null) {
             runAfter.run();
         }
