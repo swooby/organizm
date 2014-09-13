@@ -134,8 +134,14 @@ public class ApplicationOrganizm //
     }
 
     @Override
+    public void onBeginningOfSpeech() {
+        FooLog.info(TAG, "+onBeginningOfSpeech()");
+        FooLog.info(TAG, "-onBeginningOfSpeech()");
+    }
+
+    @Override
     public void onPartialResult(Hypothesis hypothesis) {
-        //FooLog.info(TAG, "+onPartialResult(...)");
+        //FooLog.info(TAG, "+onPartialResult(hypothesis=" + hypothesis + ")");
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
             FooLog.info(TAG, "onPartialResult: text=" + FooString.quote(text));
@@ -147,16 +153,16 @@ public class ApplicationOrganizm //
                 } else if (FORECAST_SEARCH.equals(text)) {
                     switchSearch(FORECAST_SEARCH);
                 } else {
-                    announce(text, Toast.LENGTH_SHORT);
+                    //announce(text, Toast.LENGTH_SHORT);
                 }
             }
         }
-        //FooLog.info(TAG, "-onPartialResult(...)");
+        //FooLog.info(TAG, "-onPartialResult(hypothesis=" + hypothesis + ")");
     }
 
     @Override
     public void onResult(Hypothesis hypothesis) {
-        FooLog.info(TAG, "+onResult(...)");
+        FooLog.info(TAG, "+onResult(hypothesis=" + hypothesis + ")");
         //mTextToSpeech.clear();
         if (hypothesis != null) {
             String text = hypothesis.getHypstr();
@@ -165,20 +171,18 @@ public class ApplicationOrganizm //
                 announce(text, Toast.LENGTH_LONG);
             }
         }
-        FooLog.info(TAG, "-onResult(...)");
-    }
-
-    @Override
-    public void onBeginningOfSpeech() {
-        FooLog.info(TAG, "+onBeginningOfSpeech()");
-        FooLog.info(TAG, "-onBeginningOfSpeech()");
+        FooLog.info(TAG, "-onResult(hypothesis=" + hypothesis + ")");
     }
 
     @Override
     public void onEndOfSpeech() {
         FooLog.info(TAG, "+onEndOfSpeech()");
-        if (!KWS_SEARCH.equals(mSpeechRecognizer.getSearchName())) {
+        String searchName = mSpeechRecognizer.getSearchName();
+        FooLog.info(TAG, "onEndOfSpeech: searchName=" + FooString.quote(searchName));
+        if (!KWS_SEARCH.equals(searchName)) {
             switchSearch(KWS_SEARCH);
+        } else {
+            //mSpeechRecognizer.stop();?
         }
         FooLog.info(TAG, "-onEndOfSpeech()");
     }
